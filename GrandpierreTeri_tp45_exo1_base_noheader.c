@@ -72,6 +72,8 @@ static void child_routine(data *info, int pc_id, pid_t ppid) {
         snd_info(info, pc_id);                          // send info
     }
     printf("child #%d terminating\n", pc_id);
+    close(pipes[pc_id][0]);
+    close(pipes[(pc_id + 1) % pc_nb][1]);
     exit(EXIT_SUCCESS);
 }
 
@@ -84,6 +86,8 @@ static void child0_routine(data *info, int pc_id, pid_t ppid) {
         snd_info(info, pc_id);                          // send info
     }
     printf("first child (#%d) terminating\n", 0);
+    close(pipes[pc_id][0]);
+    close(pipes[(pc_id + 1) % pc_nb][1]);
     exit(EXIT_SUCCESS);
 }
 
@@ -145,7 +149,8 @@ int main(int argc, char **argv) {
     info.src_pid = ppid;    // source pc pid
     info.src_id = -1;    // source pc identifier
 
-    puts("start working...");
+    printf("parent proc #%d (%d) starts... var=%d, const=%d\n", info.src_id, 
+            info.src_pid, info.var, info.cst);
 
     // main pc injects info in first pipe
     if (write(pipes[0][1], &info, sizeof(info)) == -1) {
@@ -168,15 +173,34 @@ int main(int argc, char **argv) {
         }
     }
 
-    for (int i = 0; i < pc_nb; i++) {
+    for (int i = 1; i < pc_nb; i++) {
         close(pipes[i][0]);  // close pipes read
         close(pipes[i][1]);  // closes pipes write
     }
+    close(pipes[0][1]);
 
     while (wait(NULL) != -1)
         ;   // wait for all childs pc to terminate
+
+    if (read(pipes[0][0], &info, sizeof(data)) < 0)
+        terminate(errno, "read in first pipe by parent proc");
+    printf("parent proc get the info back from #%d: var=%d, const=%d\n", info.src_id, 
+            info.var, info.cst);
     
-    puts("end prgm");
+    close(pipes[0][0]);  // let the last child write in the pipe (no SIGPIPE)
+    puts("---<> end prgm <>---");
 
     return EXIT_SUCCESS;
 }
+
+/**
+ * I make the parent proc close the pipe pipes[0][0] after the wait,
+ * because the last child (#(pc_nb - 1)) has to write in this pipe 
+ * while no one is reading form it (the child #0 closed it upon terminating)
+ * only the parent proc can still read from it.
+ * This caused the program to sometime terminate while the last child didn't
+ * (this however is weird, the error EPIPE would have been raised
+ * by the terminate() function and after numerous testings, i noticed it didn't,
+ * the program simply terminate without letting the child pc_nb - 1 to write 
+ * to stderr this error... ).
+ * */

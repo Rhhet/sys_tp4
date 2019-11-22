@@ -32,6 +32,8 @@ void child_routine(data *info, int pc_id, pid_t ppid) {
         snd_info(info, pc_id);                          // send info
     }
     printf("child #%d terminating\n", pc_id);
+    close(pipes[pc_id][0]);
+    close(pipes[(pc_id + 1) % pc_nb][1]);
     exit(EXIT_SUCCESS);
 }
 
@@ -44,6 +46,8 @@ void child0_routine(data *info, int pc_id, pid_t ppid) {
         snd_info(info, pc_id);                          // send info
     }
     printf("first child (#%d) terminating\n", 0);
+    close(pipes[pc_id][0]);
+    close(pipes[(pc_id + 1) % pc_nb][1]);
     exit(EXIT_SUCCESS);
 }
 

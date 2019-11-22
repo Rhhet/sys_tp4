@@ -54,7 +54,8 @@ int main(int argc, char **argv) {
     info.src_pid = ppid;    // source pc pid
     info.src_id = -1;    // source pc identifier
 
-    puts("start working...");
+    printf("parent proc #%d (%d) starts... var=%d, const=%d\n", info.src_id, 
+            info.src_pid, info.var, info.cst);
 
     // main pc injects info in first pipe
     if (write(pipes[0][1], &info, sizeof(info)) == -1) {
@@ -77,15 +78,22 @@ int main(int argc, char **argv) {
         }
     }
 
-    for (int i = 0; i < pc_nb; i++) {
+    for (int i = 1; i < pc_nb; i++) {
         close(pipes[i][0]);  // close pipes read
         close(pipes[i][1]);  // closes pipes write
     }
+    close(pipes[0][1]);
 
     while (wait(NULL) != -1)
         ;   // wait for all childs pc to terminate
+
+    if (read(pipes[0][0], &info, sizeof(data)) < 0)
+        terminate(errno, "read in first pipe by parent proc");
+    printf("parent proc get the info back from #%d: var=%d, const=%d\n", info.src_id, 
+            info.var, info.cst);
     
-    puts("end prgm");
+    close(pipes[0][0]);  // let the last child write in the pipe (no SIGPIPE)
+    puts("---<> end prgm <>---");
 
     return EXIT_SUCCESS;
 }
