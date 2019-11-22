@@ -1,3 +1,12 @@
+/**
+ * IMPORTANT: Un code beaucoup plus propre est disponible
+ * sur github (https://github.com/Rhhet/sys_tp4). 
+ * L'impossibilite de rentre plus de 3
+ * fichiers empeche l'ecriture de header et d'autre fichiers
+ * sources dans l'objcetif d'avoir un code bien mieu structure...
+ * */
+
+
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
