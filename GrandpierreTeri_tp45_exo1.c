@@ -97,3 +97,15 @@ int main(int argc, char **argv) {
 
     return EXIT_SUCCESS;
 }
+
+/**
+ * I make the parent proc close the pipe pipes[0][0] after the wait,
+ * because the last child (#(pc_nb - 1)) has to write in this pipe 
+ * while no one is reading form it (the child #0 closed it upon terminating)
+ * only the parent proc can still read from it.
+ * This caused the program to sometime terminate while the last child didn't
+ * (this however is weird, the error EPIPE would have been raised
+ * by the terminate() function and after numerous testings, i noticed it didn't,
+ * the program simply terminate without letting the child pc_nb - 1 to write 
+ * to stderr this error... ).
+ * */
