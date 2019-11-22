@@ -20,24 +20,25 @@ typedef struct {
     pid_t src_pid;  // source pc pid
 } data;
 
-// prototypes
-static void terminate(const char *msg, ...);
-static void child_routine(data *info, int pc_id, pid_t pid);
-static void child0_routine(data *info, int pc_id, pid_t pid);
+static void child_routine(data *info, int pc_id, pid_t ppid);
+static void child0_routine(data *info, int pc_id, pid_t ppid);
 static bool rcv_info(data *info, int pc_id);
-static bool mod_info(data *info, int pc_id, pid_t pid);
-static bool print_info(data *info);
-static bool snd_info(data *info, int pc_id);
+static pid_t mod_info(data *info, int pc_id, pid_t pid);
+static void print_info(data *info, pid_t pre_pid, pid_t ppid);
+static void snd_info(data *info, int pc_id);
 static void close_pipes(int i);
 
 // declare all pipes needed for the pcs
 int pipes[MAX_PC_NB][2];
 int pc_nb, loop_nb;
 
-static void terminate(const char *msg, ...) {
-    // TODO add vararg ... + modif exit arg (add param to terminate)
-    fprintf(stderr, "error: %s\n", msg);
-    exit(EXIT_FAILURE);
+static void terminate(int errcode, const char *msg, ...) {
+    va_list specifiers;
+    va_start(specifiers, msg);
+    vfprintf(stderr, msg, specifiers);
+    fprintf(stderr, "\n%s", strerror(errno));
+    va_end(specifiers);
+    exit(errcode);
 }
 
 static void close_pipes(int pc_id) {
@@ -54,22 +55,26 @@ static void close_pipes(int pc_id) {
     }
 }
 
-static void child_routine(data *info, int pc_id, pid_t pid) {
+static void child_routine(data *info, int pc_id, pid_t ppid) {
+    pid_t pid = getpid();
     while (rcv_info(info, pc_id)) {
-        mod_info(info, pc_id, pid);  // modif info
-        print_info(info);       // print info
-        snd_info(info, pc_id);  // send info
+        pid_t pre_pid = mod_info(info, pc_id, pid);     // modif info
+        print_info(info, pre_pid, ppid);                // print info
+        snd_info(info, pc_id);                          // send info
     }
+    printf("child #%d terminating\n", pc_id);
     exit(EXIT_SUCCESS);
 }
 
-static void child0_routine(data *info, int pc_id, pid_t pid) {
+static void child0_routine(data *info, int pc_id, pid_t ppid) {
+    pid_t pid = getpid();
     for (int i = 0; i < loop_nb; i++) {
         rcv_info(info, pc_id);
-        mod_info(info, pc_id, pid);  // modif info
-        print_info(info);       // print info
-        snd_info(info, pc_id);  // send info
+        pid_t pre_pid = mod_info(info, pc_id, pid);     // modif info
+        print_info(info, pre_pid, ppid);                // print info
+        snd_info(info, pc_id);                          // send info
     }
+    printf("first child (#%d) terminating\n", 0);
     exit(EXIT_SUCCESS);
 }
 
@@ -77,35 +82,40 @@ static void child0_routine(data *info, int pc_id, pid_t pid) {
 static bool rcv_info(data *info, int pc_id) {
     int status;
     if ((status = read(pipes[pc_id][0], info, sizeof(data))) == -1)
-        terminate("reading from pipe");
+        terminate(errno, "reading from pipe #%d", pc_id);
     return (status == sizeof(data)) ? true : false; 
 }
-// add pid to params
-static bool mod_info(data *info, int pc_id, pid_t pid) {
+
+static pid_t mod_info(data *info, int pc_id, pid_t pid) {
+    pid_t pre_pid = info->src_pid;  // keep preceeding proc's pid
     info->var++;
     info->src_pid = pid;
     info->src_id = pc_id;
-    return true;
+    return pre_pid;
 }
 
-static bool print_info(data *info) {
-    printf("proc #%d (pid=%d) -- var=%d\n", info->src_id, 
-            info->src_pid, info->var);
-    return true;
+static void print_info(data *info, pid_t pre_pid, pid_t ppid) {
+    if (info->src_id == 0) {
+        printf("proc #%d (pid=%d) -- var=%d received from proc #%d (pid=%d)\n", info->src_id, 
+                info->src_pid, info->var, (pre_pid == ppid) ? -1: pc_nb - 1, 
+                pre_pid);
+    } else {
+        printf("proc #%d (pid=%d) -- var=%d received from #%d (pid=%d)\n", info->src_id, 
+                info->src_pid, info->var, (info->src_id - 1) % pc_nb, pre_pid);
+    }
 }
 
-static bool snd_info(data *info, int pc_id) {
+static void snd_info(data *info, int pc_id) {
     if (write(pipes[(pc_id + 1) % pc_nb][1], info, sizeof(data)) == -1)
-        terminate("writing in pipe");
-    return true;
+        terminate(errno, "writing in pipe #%d", (pc_id + 1) % pc_nb);
 }
 
 int main(int argc, char **argv) {
+
     if (argc != 3) {
-        fprintf(stderr, "usage: %s <nb of pcs> <nb of loops>\n",
-                argv[0]);
-        exit(EXIT_FAILURE);
+        terminate(EXIT_FAILURE, "usage: %s <nb of procs> <nb of loops>\n", argv[0]);
     }
+    
     pc_nb = atoi(argv[1]);
     loop_nb = atoi(argv[2]);
     pid_t pids[pc_nb];
@@ -114,35 +124,37 @@ int main(int argc, char **argv) {
     // creating pipes
     for (int i = 0; i < pc_nb; i++) {
         if (pipe(pipes[i]) == -1) {
-            terminate("creating pipe");
+            terminate(errno, "creating pipe #%d", i);
         }
     }    
 
     // initializing info
+    pid_t ppid = getpid();
+
     info.cst = 999;     
     info.var = 0;       // increment var
-    info.src_pid = getpid();    // source pc pid
+    info.src_pid = ppid;    // source pc pid
     info.src_id = -1;    // source pc identifier
 
     puts("start working...");
 
     // main pc injects info in first pipe
     if (write(pipes[0][1], &info, sizeof(info)) == -1) {
-        terminate("injecting msg into first pipe");
+        terminate(errno, "injecting msg into first pipe");
     }
 
     // creating pb_nb childs pcs
     for (int i = 0; i < pc_nb; i++) {
         switch (fork()) {
             case -1:
-                terminate("creating child");
+                terminate(errno, "creating child #%d", i);
                 break;
             case 0:     // child i does
                 close_pipes(i);
                 if (i)
-                    child_routine(&info, i, getpid());
+                    child_routine(&info, i, ppid);
                 else 
-                    child0_routine(&info, i, getpid());
+                    child0_routine(&info, i, ppid);
             default: ;
         }
     }
