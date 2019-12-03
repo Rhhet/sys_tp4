@@ -52,11 +52,32 @@ void child0_routine(data *info, int pc_id, pid_t ppid) {
 }
 
 // modif return of these fcts
-bool rcv_info(data *info, int pc_id) {
+bool rcv_info2(data *info, int pc_id) {
     int status;
     if ((status = read(pipes[pc_id][0], info, sizeof(data))) == -1)
         terminate(errno, "reading from pipe #%d", pc_id);
     return (status == sizeof(data)) ? true : false; 
+}
+
+bool rcv_info(data *info, int pc_id) {
+    int status = read(pipes[pc_id][0], info, sizeof(data));
+    int offset;
+    switch (status) {
+        case -1:
+            terminate(errno, "reading from pipe #%d", pc_id);
+        case sizeof(data):
+            return true;
+        case 0:
+            return false;
+        default:    // only a portion of the data has been read => continue to read
+            offset = status;
+            while (offset != sizeof(data)) {
+                if ((status = read(pipes[pc_id][0], info + offset, sizeof(data))) == -1)
+                    terminate(errno, "reading from pipe #%d", pc_id);
+                offset += status;
+            }
+            return true;
+    }
 }
 
 pid_t mod_info(data *info, int pc_id, pid_t pid) {
