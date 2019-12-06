@@ -3,7 +3,7 @@
  * sur github (https://github.com/Rhhet/sys_tp4). 
  * L'impossibilite de rentre plus de 3
  * fichiers empeche l'ecriture de header et d'autre fichiers
- * sources dans l'objcetif d'avoir un code bien mieu structure...
+ * sources dans l'objcetif d'avoir un code bien mieux structure...
  * */
 
 
