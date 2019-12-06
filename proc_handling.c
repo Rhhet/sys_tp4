@@ -72,7 +72,7 @@ bool rcv_info(data *info, int pc_id) {
         default:    // only a portion of the data has been read => continue to read
             offset = status;
             while (offset != sizeof(data)) {
-                if ((status = read(pipes[pc_id][0], info + offset, sizeof(data))) == -1)
+                if ((status = read(pipes[pc_id][0], info + offset, sizeof(data) - offset)) == -1)
                     terminate(errno, "reading from pipe #%d", pc_id);
                 offset += status;
             }
