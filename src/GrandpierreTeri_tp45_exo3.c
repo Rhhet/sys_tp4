@@ -16,7 +16,7 @@
 
 #define MAX_LG 80
 
-int msg_nb, period, cpt = 0;
+int msg_nb, period, cpt = 0;	// IMPORTANT: the number of messages is NOT used in the child routine
 int pip[2];
 
 void terminate(int errcode, const char *msg, ...) {
