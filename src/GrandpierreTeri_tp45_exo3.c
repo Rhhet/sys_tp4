@@ -17,7 +17,7 @@
 #define MAX_LG 80
 
 int msg_nb, period, cpt = 0;	// IMPORTANT: the number of messages is NOT used in the child routine
-int pip[2];
+int pip[2];						// see line 43 for why i use msg_nb as a global variable
 
 void terminate(int errcode, const char *msg, ...) {
     va_list specifiers;
